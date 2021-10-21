@@ -1,0 +1,29 @@
+html,
+body {
+
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  flex-wrap: wrap;
+  background-color: #333333;
+}
+
+.btn {
+  line-height: 10px;
+  height: 30px;
+  text-align: center;
+  width: 120px;
+  cursor: pointer;
+  margin-top: 5px;
+  margin-left: 5px;
+  background-color: #444444;
+  color: #FFFFFF;
+}
+
+.ui-slider-range  {
+  background-color:rgb(148, 148, 255);
+}
+
+#newtimewindow {
+  width: 70vw;
+}

@@ -1,0 +1,428 @@
+<!DOCTYPE html>
+<html>
+<head>
+	<!-- Load plotly.js into the DOM -->
+  <script src='https://cdn.plot.ly/plotly-2.4.2.min.js'></script>
+  <title>KNX Interface</title>
+  <style> 
+    #body { background-color: #333333; color: #FFFFFF; } 
+    #body { margin: 0; padding-bottom: 3rem; font-family: Impact,-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; }
+  </style>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/jqueryui/1.12.1/jquery-ui.min.css">
+</head>
+
+<body style="overflow:scroll; background-color: #333333; color:FFFFFF">
+  <link rel="stylesheet" href="style.css">
+  <div id="buttonArray" style="color:#333333">
+    <button class="btn" id="All btn" style="background-color: #333333; color: #FFFFFF">ALL</button>
+    <button class="btn" id="3.6.22 btn">3.6.22</button>
+    <button class="btn" id="3.6.39 btn">3.6.39</button>
+    <button class="btn" id="3.6.25 btn">3.6.25</button>
+  </div>
+  <div>
+    <button class="togglePlan btn" id="togglePlan btn" style="z-index: 5;"> toggle Plan</button>
+    <script>
+      /*
+      <label  style="color: #FFFFFF;" for="speed-z"> 
+        <b id="timewindowtext">Change time window to last 15 minutes</b> 
+        <input id="timewindow" name="timewindow" type="range" class="menu" min="1" max="30" value="15" step="1"/>
+      </label>
+      */
+    </script>
+
+  </div>
+  <p style="width: 1000px;">
+    <label for="amount" style=" color: #fff; overflow: scroll">Time delta range:</label>
+    <input type="text" id="amount" readonly style="border:0; width: 500px; background-color: #333333; color:#fff; font-weight:bold;">
+  </p>
+  <div id="slider-range" style="width: 70vw; height: 0.7vw;"></div>
+
+  <script src="https://code.jquery.com/jquery-1.12.4.js"></script>
+  <script src="https://code.jquery.com/ui/1.12.1/jquery-ui.js"></script>
+  <script>
+    $( function() {
+    $( "#slider-range" ).slider({
+    range: true,
+    min: -2000,
+    max: 0,
+    values: [ -1999, -1 ],
+    slide: function( event, ui ) {
+      $( "#amount" ).val( "T+" + -$( "#slider-range" ).slider( "values", 0 ) + "s (~" + ("" + parseInt(-$( "#slider-range" ).slider( "values", 0 ))/60).substring(0,2) + 
+                  "min) to T+" + -$( "#slider-range" ).slider( "values", 1 ) + "s (~" + ("" + parseInt(-$( "#slider-range" ).slider( "values", 1 ))/60).substring(0,2) + "min)");
+    }
+    });
+      $( "#amount" ).val( "T+" + -$( "#slider-range" ).slider( "values", 0 ) + "s (~" + ("" + parseInt(-$( "#slider-range" ).slider( "values", 0 ))/60).substring(0,2) + 
+                  "min) to T+" + -$( "#slider-range" ).slider( "values", 1 ) + "s (~" + ("" + parseInt(-$( "#slider-range" ).slider( "values", 1 ))/60).substring(0,2) + "min)");
+    });
+  </script>
+
+  <div id="planDiv" style="visibility: hidden; z-index: 10;">
+    <image id="plan" src="/res/plan.png" style="width: 1000px; height: 1000px; "></image>
+  </div>
+
+  <div id='myDiv' style="background-color: #333333; position: absolute; margin-top: 200px; margin-left: 50px; height: 500vw; visibility: visible; z-index: 1;"></div>
+  <div style="position: absolute; margin-top: 50px; margin-left: 1100px; visibility: visible; z-index: 0;">
+    
+  </div>
+
+  <script type="text/javascript" src="/socket.io/socket.io.js"></script>
+
+  <script>
+    var socket = io("http://192.168.178.65:3000", {'forceNew':true });
+    var data = [];
+    var btns = [];
+    //var lastXMinutes = 15;
+    var minus = -1999;
+    var shown = false;
+    var presentAdd = "all";
+
+    var dateStr = getTimeStamp(new Date());
+    init();
+
+    document.getElementById('All btn').addEventListener('click', function() {
+      presentAdd = 'all';
+      sendSQLRange();
+		});
+    document.getElementById('3.6.22 btn').addEventListener('click', function() {
+      dateStr = getTimeStamp(new Date());
+      presentAdd = '3.6.22';
+      sendSQLRange();
+    });
+    document.getElementById('3.6.39 btn').addEventListener('click', function() {
+      dateStr = getTimeStamp(new Date());
+      presentAdd = '3.6.39';
+      sendSQLRange();
+    });
+    document.getElementById('3.6.25 btn').addEventListener('click', function() {
+      dateStr = getTimeStamp(new Date());
+      presentAdd = '3.6.25';
+      sendSQLRange();
+    });
+    document.getElementById('togglePlan btn').addEventListener('click', function() {
+      var planDiv = document.getElementById('planDiv');
+      if(planDiv.style.visibility == "hidden") { 
+        planDiv.style.visibility = "visible"; 
+        for(var i = 0; i < btns.length; i++) {
+          btns[i].style.visibility = "visible";
+        }
+      }
+      else                                     { 
+        planDiv.style.visibility = "hidden" ; 
+        for(var i = 0; i < btns.length; i++) {
+          btns[i].style.visibility = "hidden";
+        }
+      }
+		});
+
+    socket.emit('dataLastall', dateStr);
+
+    socket.on('data', function(msg) {
+      console.log('recieved Data');
+      data = [];
+      for(var i = 0; i < msg.length; i++) {
+        data.push(msg[i]);
+      }
+
+      var x = [];
+      var y = [];
+      var t = [];
+      /*
+      x.push(0);
+      y.push(0);
+      t.push(dateStr);
+      */
+      for(var i = 0; i < data.length; i++) {
+        if(data[i].payload_data != null) {
+          //if(data[i].payload_data > 500) { 
+            //console.log(data[i].source_addr + " " + data[i].payload_data); 
+          //}
+    
+          var sek1;
+          var sek2;
+          var dat1;
+          var dat2;
+
+          sek1 = data[i].timestamp.split(':');
+          sek2 = sek1[2].split('.');
+          sek2 = "" + sek2[0] + sek2[1].slice(0, 3);
+          sek2 = sek2 + "000";
+
+          dat1 = dateStr.split(':');
+          dat2 = dat1[2].split('.');
+          dat2 = "" + dat2[0] + dat2[1];
+          dat2 = parseInt(dat2) - ((sek1[1] - dat1[1])*60*1000000);
+
+          if((-(parseInt(dat2) - parseInt(sek2))/1000000) > 0) {
+            y.push(parseInt(data[i].payload_data));
+            //x.push(((-(parseInt(dat2) - parseInt(sek2))/1000000)) - (lastXMinutes*60));   // the amount of seconds the event is passed
+            x.push(((-(parseInt(dat2) - parseInt(sek2))/1000000)) - (-minus));            // the amount of seconds the event is passed
+            t.push(data[i].source_addr);
+          }
+
+          //console.log('-' + parseInt(dat2) + '-' + parseInt(sek2) +'/1000000 =');
+          //console.log('check: ' + (((-(parseInt(dat2) - parseInt(sek2))/1000000)) - (lastXMinutes*60)));
+
+        }
+      }
+
+      var trace2 = {
+        x   : [],
+        y   : [],
+        mode: 'lines+markers',
+        type: 'scatter'
+      };
+
+      //var data = [trace1, trace2];
+      var data = [{
+        mode: "lines+markers",
+        type: "bar",
+        width: 1,
+        hovertext: t,
+        x   : x, 
+        y   : y, 
+        transforms: [{
+          meta: {
+            columnNames: {"target": "x"}},
+            type: "sort",
+            order: "descending",
+            targetsrc: "Maihoo:0:9f92c9", 
+        target: x}]
+      }, trace2];
+
+      var font = {color: '#FFFFFF'};
+
+      var layout = {
+        title         : 'payload as number from device id \"' + presentAdd + '\" at \"' + dateStr + '\" (cap at 200)',
+        barmode       : 'group',
+        showlegend    : false,
+        paper_bgcolor : '#333333',
+        plot_bgcolor  : '#282828',
+        width         : '1000',
+        height        : '500',
+        font          : font,
+        xaxis: {
+          title       : 'time delta in seconds',
+          type        : 'lin',
+          autorange   : true
+        },
+        yaxis: {
+          title       : 'payload',
+          type        : 'log',
+          autorange   : true
+        }
+      };
+
+      Plotly.newPlot('myDiv', data, layout);
+
+    });
+
+    function init() {
+      initButtons("3.2.75", 300, 410);
+      initButtons("3.2.74", 220, 410);
+      initButtons("3.2.73", 170, 521);
+      initButtons("3.2.72", 170, 780);
+      initButtons("3.2.71", 170, 835);
+      initButtons("3.2.70", 335, 890);
+
+      initButtons("3.2.67", 390, 890);
+
+      initButtons("3.2.59", 110, 800);
+
+      initButtons("3.2.47", 570, 888);
+      initButtons("3.2.46", 625, 888);
+
+      initButtons("3.2.31", 708, 888);
+
+      initButtons("3.2.25", 280, 850);
+      initButtons("3.2.24", 255, 850);
+      initButtons("3.2.23", 230, 840);
+      initButtons("3.2.22", 230, 820);
+      initButtons("3.2.21", 280, 793);
+      initButtons("3.2.20", 255, 793);
+      initButtons("3.2.19", 230, 800);
+
+      initButtons("3.2.12", 212, 517);
+      initButtons("3.2.11", 212, 464);
+
+      initButtons("3.2.8" , 460, 893);
+      initButtons("3.2.7" , 525, 893);
+      initButtons("3.2.6" , 104, 893);
+      initButtons("3.2.5" , 170, 893);
+      initButtons("3.2.4" , 285, 895);
+      initButtons("3.2.3" , 195, 583);
+      initButtons("3.2.2" , 195, 650);
+      initButtons("3.2.1" , 170, 720);
+
+      initButtons("3.3.25", 355, 410);
+      initButtons("3.3.24", 485, 410);
+      initButtons("3.3.23", 595, 414);
+      initButtons("3.3.22", 680, 414);
+
+      initButtons("3.3.14", 520, 350);
+      initButtons("3.3.15", 520, 285);
+
+      initButtons("3.5.67", 825, 500);
+      initButtons("3.5.62", 895, 65 );
+      initButtons("3.5.61", 825, 170);
+
+      initButtons("3.5.59", 825, 975);
+      initButtons("3.5.58", 825, 888);
+      initButtons("3.5.57", 825, 750);
+      initButtons("3.5.56", 825, 580);
+      initButtons("3.5.55", 825, 300);
+      initButtons("3.5.54", 825, 230);
+      initButtons("3.5.53", 825, 110);
+      initButtons("3.5.52", 825, 50 );
+
+      initButtons("3.6.66", 825, 410);
+
+      initButtons("3.6.42", 755, 950);
+
+      initButtons("3.6.12", 755, 888);
+      initButtons("3.6.11", 760, 410);
+      initButtons("3.6.10", 744, 270);
+      initButtons("3.6.9" , 744, 318);
+      initButtons("3.6.8" , 730, 365);
+      initButtons("3.6.7" , 757, 365);
+      initButtons("3.6.6" , 785, 270);
+      initButtons("3.6.5" , 785, 318);
+      initButtons("3.6.4" , 783, 365);
+
+      document.getElementById("slider-range").addEventListener('click', function() {
+        dateStr = getTimeStamp(new Date());
+        sendSQLRange();
+      });
+
+      /*document.getElementById("timewindow").addEventListener('input', function() {
+        var string = "Change time window to last ";
+        string = string + parseInt(document.getElementById("timewindow").value);
+        string = string + " minutes";
+        document.getElementById("timewindowtext").textContent = ( string );
+        sendSQL();
+      });
+
+      document.getElementById("timewindow").addEventListener('change', function() {
+        sendSQL();
+		  });*/
+    }
+
+    function initButtons(id, top, left) {
+      var btn               = document.createElement('button');
+      btn.id                = id;
+      btn.class             = "plan btn";
+      btn.style.position    = "absolute";
+      btn.style.marginTop   = "" + (top -90  ) + "px";    //104
+      btn.style.marginLeft  = "" + (left-1033) + "px";    //893
+      btn.style.visibility  = "hidden"
+      btn.textContent       = id;
+      btn.addEventListener('click', function() {
+        document.getElementById('planDiv').style.visibility = "hidden";
+        presentAdd = id;
+        sendSQLRange();
+        for(var i = 0; i < btns.length; i++) {
+          btns[i].style.visibility = "hidden";
+        }
+		  });
+      document.getElementById('planDiv').append(btn);
+      btns.push(btn);
+    }
+    /*
+    function sendSQL() {
+      
+      lastXMinutes = document.getElementById('timewindow').value;
+      dateStr = getTimeStamp(new Date(), lastXMinutes);
+      console.log('sent SQL: ' + dateStr);
+      if(presentAdd == "all") { socket.emit('dataLastall', dateStr); }
+      else { socket.emit('dataLast', dateStr, presentAdd); }
+    }*/
+
+    function sendSQLRange() {
+      var v1 = $( "#slider-range" ).slider( "values", 0 );
+      var v2 = $( "#slider-range" ).slider( "values", 1 );
+
+      console.log('v1: ' + v1);
+      console.log('v2: ' + v2);
+      var dateTo   = newgetTimeStamp(new Date(), v2);
+      var dateFrom = newgetTimeStamp(new Date(), v1);
+      console.log('dateTo  : ' + dateTo);
+      console.log('dateFrom: ' + dateFrom);
+      dateStr = dateFrom;
+      minus = v1;
+      
+      if(presentAdd == "all") { socket.emit('dataLastall', dateStr); }
+      else { socket.emit('dataRange', dateFrom, dateTo, presentAdd); }
+    }
+
+    function mod(x, n) {
+      x=parseInt(x);
+      n=parseInt(n);
+      return ((x%n)+n)%n;
+    };
+
+    function newgetTimeStamp(date, deltaMinus) {
+      console.log('deltaMinus: ' + deltaMinus);
+      console.log('minutes reduced: ' + (parseInt(deltaMinus)/parseInt(60)));
+      var dateString = "";
+      var year;
+      var mon;
+      var day;
+      var hr;
+      var min;
+      var sec = parseInt(  date.getSeconds()  + deltaMinus);
+      if(sec < 0) { min  = date.getMinutes()  + (parseInt(deltaMinus)/parseInt(60)) ;}
+      else        { min  = date.getMinutes()      ;}
+      if(min < 0) { hr   = date.getHours()    + (parseInt(min)/parseInt(60)) ;}
+      else        { hr   = date.getHours()        ;}
+      if(hr  < 0 ){ day  = date.getDate()     - 1 ;}
+      else        { day  = date.getDate()         ;}
+      if(day < 0 ){ mon  = date.getMonth()        ;}
+      else        { mon  = date.getMonth()    + 1 ;}
+      if(mon < 0 ){ year = date.getFullYear() - 1 ;}
+      else        { year = date.getFullYear()     ;}
+      sec = mod(sec, 60);
+      min = mod(min, 60);
+      hr  = mod(hr , 24);
+      mon = mod(mon, 12);
+      dateString = dateString + year;
+      dateString = dateString + '-' + ("0" + mon).slice(-2);
+      dateString = dateString + '-' + ("0" + day).slice(-2);
+      dateString = dateString + ' ' + ("0" + hr).slice(-2);
+      dateString = dateString + ':' + ("0" + min).slice(-2);
+      dateString = dateString + ':' + ("0" + date.getSeconds()).slice(-2);
+      dateString = dateString + '.' + ("0" + date.getMilliseconds()).slice(1) + '000';
+      return dateString;
+    }
+
+    function getTimeStamp(date, minus) {
+      dateStr = "";
+      var year;
+      var mon;
+      var day;
+      var hr;
+      var min = parseInt(  date.getMinutes()  - minus);
+      if(min < 0) { hr   = date.getHours()    - 1 ;}
+      else        { hr   = date.getHours()        ;}
+      if(hr  < 0 ){ day  = date.getDate()     - 1 ;}
+      else        { day  = date.getDate()         ;}
+      if(day < 0 ){ mon  = date.getMonth()        ;}
+      else        { mon  = date.getMonth()    + 1 ;}
+      if(mon < 0 ){ year = date.getFullYear() - 1 ;}
+      else        { year = date.getFullYear()     ;}
+      min = mod(min, 60);
+      hr  = mod(hr , 24);
+      mon = mod(mon, 12);
+      dateStr = dateStr + year;
+      dateStr = dateStr + '-' + ("0" + mon).slice(-2);
+      dateStr = dateStr + '-' + ("0" + day).slice(-2);
+      dateStr = dateStr + ' ' + ("0" + hr).slice(-2);
+      dateStr = dateStr + ':' + ("0" + min).slice(-2);
+      dateStr = dateStr + ':' + ("0" + date.getSeconds()).slice(-2);
+      dateStr = dateStr + '.' + ("0" + date.getMilliseconds()).slice(1) + '000';
+      return dateStr;
+    }
+
+  </script>
+</body>
+</html>

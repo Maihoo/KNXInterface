@@ -1,0 +1,19 @@
+{
+  "name": "interface",
+  "version": "1.0.0",
+  "description": "Interface for mySQL databases in relation to knx data",
+  "main": "app.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "express": "^4.17.1",
+    "io": "^1.0.3",
+    "mysql": "^2.18.1",
+    "plotly": "^1.0.6",
+    "request": "^2.81.0",
+    "socket.io": "^4.2.0"
+  }
+}
